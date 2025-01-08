@@ -1,0 +1,102 @@
+---
+title: "moch_controls"
+output: html_document
+date: "2024-12-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/Users/janelim/Desktop/moch/5_Historical control")
+
+#load packages
+library(tidyverse)
+
+#load controls dataset
+df <- read.csv("moch_controls.csv", header = T, stringsAsFactors = F)
+df$Gender <- toupper(df$Gender)
+
+```
+
+### dataset description
+
+```{r describe dataset}
+## 1. Recruitment number/sample size 
+glimpse (df)
+
+## 2. Patient profile
+### recode age
+range(df$Age)
+
+df <- df %>%
+  mutate(
+    age_group = case_when(
+      Age >= 50 & Age <60 ~ "50-59", 
+      Age >= 60 & Age <70 ~ "60-69",
+      Age >= 70 & Age <80 ~ "70-79",
+      Age >= 80 & Age <90 ~ "80-89",
+      Age >= 90 ~ "90+"
+    ),
+    age_group = factor(
+      age_group,
+      level = c("50-59", "60-69", "70-79", "80-89", "90+")
+    ) ##recode age group
+  )
+
+```
+
+#### [parameters to be tweaked further] From the current dataset, we are only including those 1) with LL fractures, 2) non-dementia/psych, 3) NWB on arrival, 4) NOT NWB on discharge, 5) those over 60
+
+```{r dataset exclusion}
+## remove upper limb, remove comorbid, remove TTWB 
+df <- df %>%
+  filter(Fracture.type != "UL") %>% #remove upper limb
+  filter(Dementia...Psy.comorbid == "nil") %>% #remove all dementia/psych
+  filter(Weight.status..AC.AC.on.arrival. != "TTWB") %>% #only NWB
+  filter(age_group != "50-59") %>% #remove <60
+  filter(Outcome != "NWB")  #remove NWB on outcome because it can skew LoS 
+  ##filter(Remark == "") 
+
+```
+
+### descriptives
+```{r frequencies}
+## descriptive frequencies
+df %>%
+  count(Fracture.type) %>%
+  mutate(pct = n/sum(n)*100) #casemix
+
+###Gender
+df %>%
+  count(Gender) %>%
+  mutate(pct = n/sum(n)*100)
+
+###Ethnicity
+df %>%
+  count(Ethnicity) %>%
+  mutate(pct = n/sum(n)*100)
+
+###Age
+df %>%
+  count(age_group) %>%
+  mutate(pct = n/sum(n)*100)
+
+df$Age <- as.numeric(df$Age)
+median(df$Age)
+
+```
+
+#### [parameters to be tweaked further] patient safety information
+
+```{r indicators}
+###U-turn in 72 hours/30-day related readmission/Adverse events
+df[grepl(".*(CGH)", df$Discharge.destination), "dc_dest"] <- "Readmitted"
+df$dc_dest %>% replace_na("Home")
+
+df %>%
+  filter(dc_dest == "Readmitted") %>%
+  count(Total.CH.LOS)
+
+###mean LOS
+mean(df$Total.CH.LOS)
+
+```
